@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 catch (_: Exception) { say("ماقدرتش أفتح الخرائط.") }
             }
             l.contains("إجازات") || l.contains("اجازات") || l.contains("العطلات الرسمية") -> {
-                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("الإجازات الرسمية في مصر " + java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)))); say("فتحت لك نتائج الإجازات الرسمية. راجع مصدرًا رسميًا للتأكيد.") }
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("الإجازات الرسمية في مصر " + java.util.Calendar.getInstance().get(java.util.Calendar.YEAR))))); say("فتحت لك نتائج الإجازات الرسمية. راجع مصدرًا رسميًا للتأكيد.") }
                 catch (_: Exception) { say("ماقدرتش أفتح البحث.") }
             }
             l.contains("أحداث") || l.contains("فعاليات") || l.contains("ماتش") || l.contains("مباريات") -> {
