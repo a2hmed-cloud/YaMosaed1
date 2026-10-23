@@ -56,6 +56,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
         setContent {
             var typedCommand by remember { mutableStateOf("") }
+            var showAgentSettings by remember { mutableStateOf(false) }
+            var agentEndpoint by remember { mutableStateOf(getSharedPreferences("agent_settings", MODE_PRIVATE).getString("endpoint", "https://api.groq.com/openai/v1/chat/completions") ?: "") }
+            var agentModel by remember { mutableStateOf(getSharedPreferences("agent_settings", MODE_PRIVATE).getString("model", "llama-3.3-70b-versatile") ?: "") }
+            var agentKey by remember { mutableStateOf(getSharedPreferences("agent_settings", MODE_PRIVATE).getString("key", "") ?: "") }
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
                     LaunchedEffect(timerActive) {
@@ -128,6 +132,42 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             enabled = typedCommand.isNotBlank()
                         ) { Text("إرسال الأمر كتابةً") }
+                        TextButton(onClick = { showAgentSettings = !showAgentSettings }) {
+                            Text(if (showAgentSettings) "إخفاء إعدادات عقل الذكاء الاصطناعي" else "⚙ إعداد عقل الذكاء الاصطناعي", color = Color(0xFF9CB9FF))
+                        }
+                        if (showAgentSettings) {
+                            OutlinedTextField(
+                                value = agentEndpoint, onValueChange = { agentEndpoint = it },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                label = { Text("رابط API المتوافق مع OpenAI") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = Color(0xFF9CB9FF), unfocusedLabelColor = Color(0xFFB7C5E2))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = agentModel, onValueChange = { agentModel = it },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                label = { Text("اسم الموديل") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = Color(0xFF9CB9FF), unfocusedLabelColor = Color(0xFFB7C5E2))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = agentKey, onValueChange = { agentKey = it },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                label = { Text("مفتاح API (يتخزن على جهازك)") },
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedLabelColor = Color(0xFF9CB9FF), unfocusedLabelColor = Color(0xFFB7C5E2))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Button(onClick = {
+                                getSharedPreferences("agent_settings", MODE_PRIVATE).edit()
+                                    .putString("endpoint", agentEndpoint.trim())
+                                    .putString("model", agentModel.trim())
+                                    .putString("key", agentKey.trim()).apply()
+                                say("حفظت إعدادات عقل الذكاء الاصطناعي على جهازك.")
+                                showAgentSettings = false
+                            }, modifier = Modifier.fillMaxWidth()) { Text("حفظ إعدادات الذكاء الاصطناعي") }
+                            Text("تحتاج مفتاحًا من مزوّد API. قد تُحسب تكلفة الاستخدام حسب المزوّد. لا تضع مفتاحًا لا تملك حق استخدامه.", color = Color(0xFF8493B1), fontSize = 11.sp, textAlign = TextAlign.Center)
+                        }
                         Spacer(Modifier.height(20.dp))
                         Button(
                             onClick = {
@@ -222,8 +262,54 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             l.contains("تويست ميوزك") || l.contains("twist music") -> musicSearch(s, false)
             l.contains("سجل في يومي") || l.contains("ضيف لمهامي") -> saveTask(s)
             l.contains("اعرض يومي") || l.contains("مهامي") || l.contains("جدولي") -> showTasks()
-            else -> say("لسه الإجابات العامة بالذكاء الاصطناعي مش متوصلة. أقدر دلوقتي أساعدك في الطقس والمنبهات والموسيقى وتنظيم يومك.")
+            else -> askAgent(s)
         }
+    }
+
+    private fun askAgent(userMessage: String) {
+        val prefs = getSharedPreferences("agent_settings", MODE_PRIVATE)
+        val endpoint = prefs.getString("endpoint", "").orEmpty().trim()
+        val model = prefs.getString("model", "").orEmpty().trim()
+        val key = prefs.getString("key", "").orEmpty().trim()
+        if (endpoint.isBlank() || model.isBlank() || key.isBlank()) {
+            say("عشان أجاوبك كذكاء اصطناعي، افتح إعداد عقل الذكاء الاصطناعي وأضف رابط المزوّد واسم الموديل ومفتاح API. أوامر الطقس والمنبه والتايمر شغالة من غيره.")
+            return
+        }
+        status = "بفكر في طلبك..." 
+        Thread {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Authorization", "Bearer $key")
+                }
+                val payload = JSONObject().apply {
+                    put("model", model)
+                    put("temperature", 0.6)
+                    put("messages", org.json.JSONArray().apply {
+                        put(JSONObject().put("role", "system").put("content", "أنت يا مساعد، وكيل مساعد شخصي مصري ودود. أجب بالعربية المصرية بشكل واضح وعملي. كن صريحًا بشأن حدودك، ولا تدّع تنفيذ شيء لم تنفذه. يمكنك شرح أن أوامر الطقس والوقت والتاريخ والتايمر والمنبه والبحث والموسيقى والمهام تنفذها أدوات محلية منفصلة عند طلبها بصيغة واضحة. لا تدّع أنك ترى ملفات المستخدم أو تتحكم في الجهاز إلا إذا كانت هناك أداة فعلية لذلك. إذا احتجت معلومة حديثة لا تملكها، وضّح ذلك."))
+                        put(JSONObject().put("role", "user").put("content", userMessage))
+                    })
+                }
+                connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val responseText = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (code !in 200..299) throw IllegalStateException("HTTP $code: " + JSONObject(responseText).optString("error", responseText).take(180))
+                val answer = JSONObject(responseText).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content").trim()
+                runOnUiThread {
+                    if (answer.isBlank()) say("الموديل رجّع إجابة فاضية. جرّب تاني.") else say(answer)
+                }
+            } catch (e: Exception) {
+                runOnUiThread { say("ماقدرتش أوصل للذكاء الاصطناعي. راجع رابط API والموديل والمفتاح والإنترنت. التفاصيل: " + (e.message ?: "خطأ اتصال").take(100)) }
+            } finally {
+                connection?.disconnect()
+            }
+        }.start()
     }
 
     private fun getWeather(city: String) {
