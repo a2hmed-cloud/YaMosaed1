@@ -29,10 +29,15 @@ class SearchClickService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (query.isEmpty() || event == null) return
-        if (event.packageName?.toString() != targetPackage) return
-        if (System.currentTimeMillis() > deadline) return finish(false)
+        if (event == null) return
+        val packageName = event.packageName?.toString() ?: return
+        // Read only supported music apps; never collect text from unrelated apps.
+        if (packageName != "com.spotify.music" && packageName != "com.soundcloud.android") return
         val root = rootInActiveWindow ?: return
+        visibleScreenText = Arabic.norm(subtreeText(root)).take(5000)
+        if (query.isEmpty()) return
+        if (packageName != targetPackage) return
+        if (System.currentTimeMillis() > deadline) return finish(false)
         val rows = mutableListOf<Triple<AccessibilityNodeInfo, Double, Double>>()
         collect(root, rows)
         val best = rows.maxByOrNull { it.second + it.third } ?: return
@@ -72,5 +77,5 @@ class SearchClickService : AccessibilityService() {
         return sb.toString()
     }
 
-    companion object { @Volatile var instance: SearchClickService? = null }
+    companion object { @Volatile var instance: SearchClickService? = null; @Volatile var visibleScreenText: String = "" }
 }
