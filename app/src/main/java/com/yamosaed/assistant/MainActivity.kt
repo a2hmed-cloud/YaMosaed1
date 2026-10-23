@@ -110,6 +110,39 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         val s = raw.trim()
         val l = s.lowercase(Locale("ar", "EG"))
         when {
+            l.contains("الساعة كام") || l.contains("الوقت كام") -> say("الساعة دلوقتي " + java.text.SimpleDateFormat("h:mm a", Locale("ar", "EG")).format(java.util.Date()))
+            l.contains("التاريخ") || l.contains("تاريخ اليوم") -> say("النهارده " + java.text.SimpleDateFormat("EEEE d MMMM yyyy", Locale("ar", "EG")).format(java.util.Date()))
+            l.contains("تايمر") || l.contains("مؤقت") -> {
+                val number = Regex("(\\d+)").find(s)?.value?.toLongOrNull()
+                if (number == null || number < 1) say("قول المدة، زي تايمر 5 دقايق أو تايمر 30 ثانية.")
+                else {
+                    val seconds = if (l.contains("دقيقة") || l.contains("دقايق") || l.contains("دقائق")) number * 60 else if (l.contains("ساعة")) number * 3600 else number
+                    val manager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
+                    val intent = Intent(this, TimerAlarmReceiver::class.java)
+                    val pending = android.app.PendingIntent.getBroadcast(this, 2718, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= 31 && !manager.canScheduleExactAlarms()) {
+                            startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                            say("اسمح بالمنبهات الدقيقة ثم كرر أمر التايمر.")
+                        } else {
+                            manager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + seconds * 1000L, pending)
+                            say("تمام، التايمر بدأ وهيوصلك تنبيه لما يخلص حتى لو خرجت من التطبيق.")
+                        }
+                    } catch (_: Exception) { say("ماقدرتش أضبط التايمر. راجع صلاحية المنبهات.") }
+                }
+            }
+            l.contains("مطاعم") || l.contains("محلات") || l.contains("أماكن قريبة") || l.contains("صيدليات") || l.contains("كافيهات") -> {
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/search/" + Uri.encode(s)))); say("فتحت الخرائط للبحث عن الأماكن المطلوبة.") }
+                catch (_: Exception) { say("ماقدرتش أفتح الخرائط.") }
+            }
+            l.contains("إجازات") || l.contains("اجازات") || l.contains("العطلات الرسمية") -> {
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("الإجازات الرسمية في مصر " + java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)))); say("فتحت لك نتائج الإجازات الرسمية. راجع مصدرًا رسميًا للتأكيد.") }
+                catch (_: Exception) { say("ماقدرتش أفتح البحث.") }
+            }
+            l.contains("أحداث") || l.contains("فعاليات") || l.contains("ماتش") || l.contains("مباريات") -> {
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(s + " مصر اليوم")))); say("فتحت لك بحثًا محدثًا عن " + s) }
+                catch (_: Exception) { say("ماقدرتش أفتح البحث.") }
+            }
             l.contains("طقس") || l.contains("الجو") || l.contains("درجة الحرارة") -> {
                 val city = s.replace("يا مساعد", "").replace("الطقس", "").replace("الجو", "").replace("درجة الحرارة", "").replace("في", "").replace("النهارده", "").replace("اليوم", "").replace("؟", "").trim().ifBlank { "Ismailia" }
                 status = "بدور على الطقس في $city..."
