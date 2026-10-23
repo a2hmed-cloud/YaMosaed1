@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -43,6 +44,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var status by mutableStateOf("جاهز! اسأل عن الطقس أو اضبط منبه أو شغّل موسيقى")
     private var recognizedText by mutableStateOf("اضغط الميكروفون وجرّب: الطقس في الإسماعيلية")
     private var listening by mutableStateOf(false)
+    private var timerRemaining by mutableIntStateOf(0)
+    private var timerActive by mutableStateOf(false)
 
     private val requestAudio = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startListening() else status = "اسمح باستخدام الميكروفون عشان أسمعك"
@@ -54,7 +57,29 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
-                    Column(
+                    LaunchedEffect(timerActive) {
+                        while (timerActive && timerRemaining > 0) {
+                            delay(1000)
+                            timerRemaining = (timerRemaining - 1).coerceAtLeast(0)
+                        }
+                        if (timerActive && timerRemaining == 0) {
+                            timerActive = false
+                            say("الوقت خلص! التايمر انتهى.")
+                        }
+                    }
+                    if (timerActive) {
+                        Column(
+                            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF101C35), Color(0xFF080D18)))).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("التايمر شغّال", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Spacer(Modifier.height(24.dp))
+                            Text(String.format(Locale.US, "%02d:%02d", timerRemaining / 60, timerRemaining % 60), fontSize = 64.sp, fontWeight = FontWeight.Bold, color = Color(0xFF79A7FF))
+                            Spacer(Modifier.height(24.dp))
+                            OutlinedButton(onClick = { timerActive = false; timerRemaining = 0; say("رجعنا للمساعد") }) { Text("إيقاف والعودة للمساعد") }
+                        }
+                    } else Column(
                         Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF101C35), Color(0xFF080D18)))).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -128,6 +153,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 if (number == null || number < 1) say("قول المدة، زي تايمر 5 دقايق أو تايمر 30 ثانية.")
                 else {
                     val seconds = if (l.contains("دقيقة") || l.contains("دقايق") || l.contains("دقائق")) number * 60 else if (l.contains("ساعة")) number * 3600 else number
+                    timerRemaining = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                    timerActive = true
                     val manager = getSystemService(ALARM_SERVICE) as android.app.AlarmManager
                     val intent = Intent(this, TimerAlarmReceiver::class.java)
                     val pending = android.app.PendingIntent.getBroadcast(this, 2718, intent, android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
@@ -170,7 +197,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun getWeather(city: String) {
         try {
-            val q = URLEncoder.encode(city, "UTF-8")
+            val normalizedCity = when (city.trim().lowercase(Locale("ar", "EG"))) {
+                "الإسماعيلية", "اسماعيلية", "الإسماعيليه" -> "Ismailia"
+                "القاهرة" -> "Cairo"
+                "الجيزة" -> "Giza"
+                "الإسكندرية", "اسكندرية" -> "Alexandria"
+                "بورسعيد" -> "Port Said"
+                "السويس" -> "Suez"
+                else -> city.trim()
+            }
+            val q = URLEncoder.encode(normalizedCity, "UTF-8")
             val g = URL("https://geocoding-api.open-meteo.com/v1/search?name=$q&count=1&language=ar&format=json").openConnection() as HttpURLConnection
             g.connectTimeout = 8000
             g.readTimeout = 8000
