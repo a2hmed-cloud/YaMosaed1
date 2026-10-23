@@ -85,8 +85,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             Icon(Icons.Filled.Mic, contentDescription = null)
                             Text(if (listening) "  بسمعك..." else "  اتكلم معايا", fontSize = 17.sp)
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Text("أوامر: الطقس في القاهرة • منبه الساعة 7 صباحًا • شغّل فيروز على سبوتيفاي • سجل في يومي المذاكرة", color = Color(0xFF8493B1), fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(14.dp))
+                        Text("جرّب أمر سريع", color = Color(0xFFB7C5E2), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { command("الطقس في الإسماعيلية") }, modifier = Modifier.weight(1f)) { Text("🌤 الطقس") }
+                            OutlinedButton(onClick = { command("الساعة كام") }, modifier = Modifier.weight(1f)) { Text("🕒 الوقت") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { command("التاريخ") }, modifier = Modifier.weight(1f)) { Text("📅 التاريخ") }
+                            OutlinedButton(onClick = { command("تايمر 1 دقيقة") }, modifier = Modifier.weight(1f)) { Text("⏱ تايمر دقيقة") }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("أوامر صوتية إضافية: منبه الساعة 7 صباحًا • مطاعم قريبة • مباريات اليوم • سجل في يومي المذاكرة", color = Color(0xFF8493B1), fontSize = 12.sp, textAlign = TextAlign.Center)
                     }
                 }
             }
