@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
         setContent {
+            var typedCommand by remember { mutableStateOf("") }
             MaterialTheme {
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
                     LaunchedEffect(timerActive) {
@@ -95,6 +96,38 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         Surface(color = Color(0xFF182238), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                             Text(recognizedText, Modifier.padding(18.dp), color = Color(0xFFD9E4FA), textAlign = TextAlign.Center)
                         }
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = typedCommand,
+                            onValueChange = { typedCommand = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("اكتب أمر أو سؤال") },
+                            placeholder = { Text("مثال: الطقس في القاهرة") },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF477DFF),
+                                unfocusedBorderColor = Color(0xFF52617D),
+                                focusedLabelColor = Color(0xFF8DB1FF),
+                                unfocusedLabelColor = Color(0xFFB7C5E2),
+                                cursorColor = Color.White
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val query = typedCommand.trim()
+                                if (query.isNotEmpty()) {
+                                    recognizedText = query
+                                    typedCommand = ""
+                                    command(query)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            enabled = typedCommand.isNotBlank()
+                        ) { Text("إرسال الأمر كتابةً") }
                         Spacer(Modifier.height(20.dp))
                         Button(
                             onClick = {
