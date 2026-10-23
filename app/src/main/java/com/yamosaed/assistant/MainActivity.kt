@@ -42,6 +42,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var recognizedText by mutableStateOf("اضغط الميكروفون وجرّب: الطقس في الإسماعيلية")
     private var listening by mutableStateOf(false)
     private lateinit var agent: Agent
+    private lateinit var host: AndroidHost
+    private var geminiKey by mutableStateOf("")
+    private var showGeminiSettings by mutableStateOf(false)
 
     private val requestAudio = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startListening() else status = "اسمح باستخدام الميكروفون عشان أسمعك"
@@ -50,11 +53,35 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this, this)
-        val ctx = Ctx(AndroidHost(this, getSharedPreferences("yamosaed", MODE_PRIVATE))) { say(it) }
+        val prefs = getSharedPreferences("yamosaed", MODE_PRIVATE)
+        host = AndroidHost(this, prefs)
+        geminiKey = prefs.getString("gemini_api_key", "").orEmpty()
+        val ctx = Ctx(host) { say(it) }
         agent = Agent(defaultTools(), WebSearchTool(), ctx)
 
         setContent {
             MaterialTheme {
+                if (showGeminiSettings) {
+                    var draftKey by remember { mutableStateOf(geminiKey) }
+                    AlertDialog(
+                        onDismissRequest = { showGeminiSettings = false },
+                        title = { Text("إعداد Gemini API") },
+                        text = {
+                            Column {
+                                Text("حط مفتاح Gemini API من Google AI Studio. المفتاح بيتحفظ على الجهاز فقط، وما ترفعهوش على GitHub.")
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(value = draftKey, onValueChange = { draftKey = it }, label = { Text("Gemini API Key") }, singleLine = true)
+                            }
+                        },
+                        confirmButton = { TextButton(onClick = {
+                            geminiKey = draftKey.trim()
+                            getSharedPreferences("yamosaed", MODE_PRIVATE).edit().putString("gemini_api_key", geminiKey).apply()
+                            showGeminiSettings = false
+                            status = if (geminiKey.isBlank()) "Gemini اتوقف، هستخدم الأوامر المحلية" else "تم حفظ مفتاح Gemini على الجهاز"
+                        }) { Text("حفظ") } },
+                        dismissButton = { TextButton(onClick = { showGeminiSettings = false }) { Text("إلغاء") } }
+                    )
+                }
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
                     Column(
                         Modifier.fillMaxSize()
@@ -66,6 +93,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         Text("يا مساعد", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
                         Text("مساعدك الصوتي المصري", color = Color(0xFFB7C5E2))
+                        TextButton(onClick = { showGeminiSettings = true }) { Text(if (geminiKey.isBlank()) "⚙ إعداد Gemini API" else "✓ Gemini متصل بالإعدادات") }
                         Spacer(Modifier.height(30.dp))
                         Box(
                             Modifier.size(150.dp).background(
@@ -134,7 +162,37 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun command(raw: String) {
-        say(agent.handle(raw))
+        val normalized = raw.lowercase(Locale("ar", "EG"))
+        val musicIntent = listOf("سبوتيفاي", "spotify", "اغنيه", "اغنية", "اغاني", "شغل", "التالي", "الجاي", "السابق", "ارجع", "وقف", "كمل", "موسيقى", "مزيكا").any { normalized.contains(it) }
+        if (geminiKey.isNotBlank() && musicIntent) {
+            say("ثانية، بفهم طلبك من Gemini وبراجع شاشة الموسيقى...")
+            Thread {
+                try {
+                    val decision = GeminiMusicClient.decide(geminiKey, raw, SearchClickService.visibleScreenText)
+                    runOnUiThread {
+                        when (decision.action) {
+                            "search" -> {
+                                val query = decision.query.trim()
+                                if (query.isBlank()) { say("مش واضح اسم الأغنية، قول اسمها تاني."); return@runOnUiThread }
+                                val armed = host.armClick("spotify", query) { ok ->
+                                    say(if (ok) "لقيت نتيجة قريبة من $query" else "ماقدرتش أختار النتيجة تلقائيًا؛ راجع شاشة Spotify.")
+                                }
+                                val opened = host.openMusicSearch("spotify", query)
+                                say(if (!opened) "مش قادر أفتح Spotify دلوقتي." else if (armed) "بدور على $query في Spotify..." else "فتحت البحث عن $query. فعّل إمكانية الوصول عشان أجرّب اختيار النتيجة تلقائيًا.")
+                            }
+                            "next" -> say(if (host.musicControl(com.yamosaed.assistant.agent.MusicAction.NEXT)) "تمام، الأغنية التالية." else "فعّل وصول الإشعارات وافتح Spotify الأول.")
+                            "previous" -> say(if (host.musicControl(com.yamosaed.assistant.agent.MusicAction.PREV)) "رجعت للأغنية السابقة." else "فعّل وصول الإشعارات وافتح Spotify الأول.")
+                            "toggle" -> say(if (host.musicControl(com.yamosaed.assistant.agent.MusicAction.TOGGLE)) "تم." else "فعّل وصول الإشعارات وافتح Spotify الأول.")
+                            else -> say(decision.reply.ifBlank { agent.handle(raw) })
+                        }
+                    }
+                } catch (_: Exception) {
+                    runOnUiThread { say(agent.handle(raw)) }
+                }
+            }.start()
+        } else {
+            say(agent.handle(raw))
+        }
     }
 
     private fun startListening() {
