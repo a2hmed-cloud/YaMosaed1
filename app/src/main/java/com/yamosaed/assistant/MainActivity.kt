@@ -3,7 +3,9 @@ package com.yamosaed.assistant
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.AlarmClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -12,28 +14,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -43,22 +30,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var speechRecognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-
-    private var status by mutableStateOf("أنا جاهز، دوس على الميكروفون واتكلم")
-    private var recognizedText by mutableStateOf("قول أي جملة بالعربي")
+    private var status by mutableStateOf("جاهز! اسأل عن الطقس أو اضبط منبه أو شغّل موسيقى")
+    private var recognizedText by mutableStateOf("اضغط الميكروفون وجرّب: الطقس في الإسماعيلية")
     private var listening by mutableStateOf(false)
 
-    private val requestAudio = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) startListening()
-        else status = "لازم تسمح باستخدام الميكروفون عشان أسمعك"
+    private val requestAudio = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startListening() else status = "اسمح باستخدام الميكروفون عشان أسمعك"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,134 +53,169 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
         setContent {
             MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF101C35), Color(0xFF080D18))
-                                )
-                            )
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                Surface(Modifier.fillMaxSize(), color = Color(0xFF080D18)) {
+                    Column(
+                        Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF101C35), Color(0xFF080D18)))).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text("يا مساعد", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Spacer(Modifier.height(8.dp))
-                            Text("مساعدك الصوتي المصري", fontSize = 16.sp, color = Color(0xFFB7C5E2))
-                            Spacer(Modifier.height(42.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(170.dp)
-                                    .background(
-                                        Brush.radialGradient(
-                                            listOf(Color(0xFF4F8CFF), Color(0xFF223D83), Color(0xFF14203D))
-                                        ),
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Mic,
-                                    contentDescription = "ميكروفون",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(64.dp)
-                                )
-                            }
-                            Spacer(Modifier.height(28.dp))
-                            Text(status, color = Color.White, textAlign = TextAlign.Center, fontSize = 16.sp)
-                            Spacer(Modifier.height(12.dp))
-                            Surface(
-                                color = Color(0xFF182238),
-                                shape = RoundedCornerShape(18.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    recognizedText,
-                                    modifier = Modifier.padding(18.dp),
-                                    color = Color(0xFFD9E4FA),
-                                    textAlign = TextAlign.Center,
-                                    fontSize = 16.sp
-                                )
-                            }
-                            Spacer(Modifier.height(24.dp))
-                            Button(
-                                onClick = {
-                                    if (ContextCompat.checkSelfPermission(
-                                            this@MainActivity, Manifest.permission.RECORD_AUDIO
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                    ) startListening()
-                                    else requestAudio.launch(Manifest.permission.RECORD_AUDIO)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF477DFF)),
-                                modifier = Modifier.fillMaxWidth().height(56.dp),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Icon(Icons.Filled.Mic, contentDescription = null)
-                                Text(if (listening) "  بسمعك..." else "  اتكلم معايا", fontSize = 17.sp)
-                            }
-                            Spacer(Modifier.height(14.dp))
-                            Text(
-                                "النسخة الأولية: الاستماع يبدأ بالضغط. الاستيقاظ بعبارة «يا مساعد» والذكاء الاصطناعي هييجوا في مراحل لاحقة.",
-                                color = Color(0xFF8493B1),
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
-                            )
+                        Text("يا مساعد", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(Modifier.height(8.dp))
+                        Text("مساعدك الصوتي المصري", color = Color(0xFFB7C5E2))
+                        Spacer(Modifier.height(30.dp))
+                        Box(Modifier.size(150.dp).background(Brush.radialGradient(listOf(Color(0xFF4F8CFF), Color(0xFF223D83), Color(0xFF14203D))), CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.Mic, contentDescription = "ميكروفون", tint = Color.White, modifier = Modifier.size(64.dp))
                         }
+                        Spacer(Modifier.height(24.dp))
+                        Text(status, color = Color.White, textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(12.dp))
+                        Surface(color = Color(0xFF182238), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text(recognizedText, Modifier.padding(18.dp), color = Color(0xFFD9E4FA), textAlign = TextAlign.Center)
+                        }
+                        Spacer(Modifier.height(20.dp))
+                        Button(
+                            onClick = {
+                                if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
+                                else requestAudio.launch(Manifest.permission.RECORD_AUDIO)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF477DFF))
+                        ) {
+                            Icon(Icons.Filled.Mic, contentDescription = null)
+                            Text(if (listening) "  بسمعك..." else "  اتكلم معايا", fontSize = 17.sp)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text("أوامر: الطقس في القاهرة • منبه الساعة 7 صباحًا • شغّل فيروز على سبوتيفاي • سجل في يومي المذاكرة", color = Color(0xFF8493B1), fontSize = 12.sp, textAlign = TextAlign.Center)
                     }
                 }
             }
         }
     }
 
-    override fun onInit(statusCode: Int) {
-        ttsReady = statusCode == TextToSpeech.SUCCESS
+    override fun onInit(code: Int) {
+        ttsReady = code == TextToSpeech.SUCCESS
         if (ttsReady) {
             val result = tts?.setLanguage(Locale("ar", "EG"))
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                status = "خدمة الصوت العربي مش متاحة على الجهاز حاليًا"
-            }
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) status = "الصوت العربي غير متاح حاليًا على الجهاز"
         }
     }
 
-    private fun startListening() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status = "التعرف على الصوت مش متاح على الجهاز"
-            return
+    private fun say(message: String) {
+        status = message
+        if (ttsReady) tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "reply")
+    }
+
+    private fun command(raw: String) {
+        val s = raw.trim()
+        val l = s.lowercase(Locale("ar", "EG"))
+        when {
+            l.contains("طقس") || l.contains("الجو") || l.contains("درجة الحرارة") -> {
+                val city = s.replace("يا مساعد", "").replace("الطقس", "").replace("الجو", "").replace("درجة الحرارة", "").replace("في", "").replace("النهارده", "").replace("اليوم", "").replace("؟", "").trim().ifBlank { "Ismailia" }
+                status = "بدور على الطقس في $city..."
+                Thread { getWeather(city) }.start()
+            }
+            l.contains("منبه") || l.contains("فكرني") || l.contains("صحيني") -> alarm(s)
+            l.contains("سبوتيفاي") || l.contains("spotify") -> musicSearch(s, true)
+            l.contains("تويست ميوزك") || l.contains("twist music") -> musicSearch(s, false)
+            l.contains("سجل في يومي") || l.contains("ضيف لمهامي") -> saveTask(s)
+            l.contains("اعرض يومي") || l.contains("مهامي") || l.contains("جدولي") -> showTasks()
+            else -> say("لسه الإجابات العامة بالذكاء الاصطناعي مش متوصلة. أقدر دلوقتي أساعدك في الطقس والمنبهات والموسيقى وتنظيم يومك.")
         }
+    }
+
+    private fun getWeather(city: String) {
+        try {
+            val q = URLEncoder.encode(city, "UTF-8")
+            val g = URL("https://geocoding-api.open-meteo.com/v1/search?name=$q&count=1&language=ar&format=json").openConnection() as HttpURLConnection
+            g.connectTimeout = 8000
+            g.readTimeout = 8000
+            val geo = JSONObject(g.inputStream.bufferedReader().use { it.readText() })
+            g.disconnect()
+            val place = geo.optJSONArray("results")?.optJSONObject(0)
+            if (place == null) { runOnUiThread { say("مش لاقي المدينة دي. قول اسم المدينة، زي الطقس في القاهرة.") }; return }
+            val lat = place.getDouble("latitude")
+            val lon = place.getDouble("longitude")
+            val name = place.optString("name", city)
+            val c = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto").openConnection() as HttpURLConnection
+            c.connectTimeout = 8000
+            c.readTimeout = 8000
+            val current = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).getJSONObject("current")
+            c.disconnect()
+            val temp = current.optDouble("temperature_2m").toInt()
+            val feels = current.optDouble("apparent_temperature").toInt()
+            val humidity = current.optInt("relative_humidity_2m")
+            val wind = current.optDouble("wind_speed_10m").toInt()
+            val weather = when (current.optInt("weather_code")) {
+                0 -> "صحو"; 1, 2 -> "صحو جزئيًا"; 3 -> "غائم"; 45, 48 -> "شبورة"
+                in 51..67 -> "رذاذ أو مطر"; in 71..77 -> "ثلج"; in 80..82 -> "زخات مطر"
+                in 95..99 -> "عواصف رعدية"; else -> "حالة جوية متغيرة"
+            }
+            runOnUiThread { say("الطقس في $name دلوقتي $weather. الحرارة $temp درجة والمحسوسة $feels، الرطوبة $humidity بالمية، والرياح $wind كيلومتر في الساعة.") }
+        } catch (_: Exception) {
+            runOnUiThread { say("مش قادر أوصل لبيانات الطقس دلوقتي. اتأكد من الإنترنت وجرب تاني.") }
+        }
+    }
+
+    private fun alarm(text: String) {
+        val m = Regex("(\\d{1,2})(?::(\\d{1,2}))?").find(text)
+        if (m == null) { say("قول الوقت، زي منبه الساعة 7 صباحًا."); return }
+        var h = m.groupValues[1].toIntOrNull() ?: 7
+        val min = m.groupValues.getOrNull(2)?.toIntOrNull() ?: 0
+        val l = text.lowercase(Locale("ar", "EG"))
+        if ((l.contains("مساء") || l.contains("بالليل")) && h in 1..11) h += 12
+        if (l.contains("صباح") && h == 12) h = 0
+        if (h !in 0..23 || min !in 0..59) { say("الوقت مش صحيح، جرب تاني."); return }
+        try {
+            startActivity(Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                putExtra(AlarmClock.EXTRA_HOUR, h)
+                putExtra(AlarmClock.EXTRA_MINUTES, min)
+                putExtra(AlarmClock.EXTRA_MESSAGE, "يا مساعد")
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            })
+            say("فتحت المنبه على $h و$min. راجع الوقت وأكد الحفظ.")
+        } catch (_: Exception) { say("مش قادر أفتح تطبيق الساعة على جهازك.") }
+    }
+
+    private fun musicSearch(text: String, spotify: Boolean) {
+        val cleaned = text.replace("يا مساعد", "").replace("شغّل", "").replace("شغل", "").replace("شغّللي", "").replace("شغللي", "").replace("أغاني", "").replace("اغاني", "").replace("موسيقى", "").replace("على سبوتيفاي", "").replace("سبوتيفاي", "").replace("تويست ميوزك", "").replace("Twist Music", "").trim()
+        val query = cleaned.ifBlank { "music" }
+        val uri = if (spotify) Uri.parse("https://open.spotify.com/search/" + Uri.encode(query)) else Uri.parse("https://www.google.com/search?q=" + Uri.encode("Twist Music $query"))
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+            say(if (spotify) "فتحت بحث سبوتيفاي عن $query. اختار الأغنية وشغلها." else "بدور على $query في Twist Music. افتح التطبيق من النتائج المتاحة.")
+        } catch (_: Exception) { say("مش قادر أفتح البحث دلوقتي.") }
+    }
+
+    private fun saveTask(text: String) {
+        val task = text.replace("يا مساعد", "").replace("سجل في يومي", "").replace("ضيف لمهامي", "").trim()
+        if (task.isBlank()) { say("قول المهمة اللي عايز تسجلها."); return }
+        val prefs = getSharedPreferences("daily_plan", MODE_PRIVATE)
+        val old = prefs.getString("tasks", "").orEmpty()
+        prefs.edit().putString("tasks", if (old.isBlank()) "• $task" else "$old\n• $task").apply()
+        say("تمام، سجلت في يومك: $task")
+    }
+
+    private fun showTasks() {
+        val tasks = getSharedPreferences("daily_plan", MODE_PRIVATE).getString("tasks", "").orEmpty()
+        say(if (tasks.isBlank()) "لسه مفيش مهام. قول سجل في يومي وبعدها المهمة." else "المهام المسجلة: $tasks")
+    }
+
+    private fun startListening() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { status = "التعرف على الصوت مش متاح على الجهاز"; return }
         speechRecognizer?.destroy()
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                listening = true
-                status = "اتكلم، أنا سامعك"
-            }
+            override fun onReadyForSpeech(params: Bundle?) { listening = true; status = "اتكلم، أنا سامعك" }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {
-                listening = false
-                status = "ثانية واحدة..."
-            }
-            override fun onError(error: Int) {
-                listening = false
-                status = "ماقدرتش أسمعك كويس. جرّب تاني."
-            }
+            override fun onEndOfSpeech() { listening = false; status = "ثانية واحدة..." }
+            override fun onError(error: Int) { listening = false; status = "ماقدرتش أسمعك كويس. جرّب تاني." }
             override fun onResults(results: Bundle?) {
                 listening = false
-                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) {
-                    recognizedText = text
-                    status = "سمعتك، دي نسخة تجريبية ولسه محتاجة توصيل الذكاء الاصطناعي"
-                    if (ttsReady) tts?.speak("أنا سمعتك بتقول: $text", TextToSpeech.QUEUE_FLUSH, null, "reply")
-                } else {
-                    status = "ماوصلنيش كلام واضح. جرّب تاني."
-                }
+                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!spoken.isNullOrBlank()) { recognizedText = spoken; command(spoken) } else status = "ماوصلنيش كلام واضح. جرّب تاني."
             }
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
