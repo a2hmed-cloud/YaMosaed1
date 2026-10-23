@@ -88,9 +88,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         Spacer(Modifier.height(8.dp))
                         Text("مساعدك الصوتي المصري", color = Color(0xFFB7C5E2))
                         Spacer(Modifier.height(30.dp))
-                        Box(Modifier.size(150.dp).background(Brush.radialGradient(listOf(Color(0xFF4F8CFF), Color(0xFF223D83), Color(0xFF14203D))), CircleShape), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Mic, contentDescription = "ميكروفون", tint = Color.White, modifier = Modifier.size(64.dp))
-                        }
+                        AssistantEyes(listening = listening)
                         Spacer(Modifier.height(24.dp))
                         Text(status, color = Color.White, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(12.dp))
